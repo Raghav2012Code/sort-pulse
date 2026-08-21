@@ -1,38 +1,29 @@
 @import 'tailwindcss';
 
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
+@theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
-  /* shadcn-style dark palette with a vibrant indigo/violet core */
-  --color-background: hsl(232 18% 7%);
-  --color-foreground: hsl(228 22% 92%);
-  --color-card: hsl(231 20% 10%);
-  --color-card-foreground: hsl(228 22% 92%);
-  --color-popover: hsl(231 20% 9%);
-  --color-popover-foreground: hsl(228 22% 92%);
-  --color-primary: hsl(244 75% 67%);
-  --color-primary-foreground: hsl(0 0% 100%);
-  --color-secondary: hsl(233 18% 18%);
-  --color-secondary-foreground: hsl(228 22% 90%);
-  --color-muted: hsl(233 16% 16%);
-  --color-muted-foreground: hsl(228 12% 62%);
-  --color-accent: hsl(262 70% 62%);
-  --color-accent-foreground: hsl(0 0% 100%);
-  --color-destructive: hsl(0 72% 58%);
-  --color-destructive-foreground: hsl(0 0% 100%);
-  --color-border: hsl(232 16% 20%);
-  --color-input: hsl(232 16% 20%);
-  --color-ring: hsl(244 75% 67%);
-
-  /* element state colors */
-  --color-bar-default: hsl(244 70% 62%);
-  --color-bar-compare: hsl(38 92% 54%);
-  --color-bar-swap: hsl(0 82% 60%);
-  --color-bar-overwrite: hsl(262 82% 66%);
-  --color-bar-sorted: hsl(152 62% 46%);
+  /* Flat, intentional dark neutrals (zinc-based, no gradient washes) */
+  --color-background: #09090b;
+  --color-foreground: #fafafa;
+  --color-card: #121215;
+  --color-card-foreground: #fafafa;
+  --color-popover: #121215;
+  --color-popover-foreground: #fafafa;
+  --color-primary: #f59e0b;
+  --color-primary-foreground: #09090b;
+  --color-secondary: #18181b;
+  --color-secondary-foreground: #e4e4e7;
+  --color-muted: #18181b;
+  --color-muted-foreground: #a1a1aa;
+  --color-accent: #f59e0b;
+  --color-accent-foreground: #09090b;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #fafafa;
+  --color-border: #27272a;
+  --color-input: #27272a;
+  --color-ring: #f59e0b;
 }
 
 @layer base {
@@ -40,37 +31,22 @@
     @apply border-border;
   }
 
-  html {
-    scrollbar-color: hsl(232 16% 28%) transparent;
-  }
-
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    background-image:
-      radial-gradient(1200px 600px at 15% -10%, hsl(244 60% 22% / 0.45), transparent 60%),
-      radial-gradient(900px 500px at 110% 10%, hsl(262 60% 20% / 0.4), transparent 55%);
-    background-attachment: fixed;
   }
 }
 
-/* --- Sorting bar states --- */
+/* --- Sorting bar states: flat, high-contrast, mathematically distinct --- */
 .bar-default {
-  background: linear-gradient(180deg, hsl(244 75% 64%), hsl(262 75% 52%));
-  box-shadow: 0 0 10px hsl(244 75% 64% / 0.25);
+  background: #52525b; /* zinc-600 */
 }
 .bar-comparing {
-  background: linear-gradient(180deg, hsl(38 95% 56%), hsl(35 90% 46%));
-  box-shadow: 0 0 14px hsl(38 92% 54% / 0.55);
+  background: #ef4444; /* red-500 */
 }
-.bar-swapping {
-  background: linear-gradient(180deg, hsl(0 84% 62%), hsl(0 82% 46%));
-  box-shadow: 0 0 14px hsl(0 82% 60% / 0.55);
-}
+.bar-swapping,
 .bar-overwriting {
-  background: linear-gradient(180deg, hsl(265 84% 68%), hsl(262 82% 50%));
-  box-shadow: 0 0 14px hsl(262 82% 66% / 0.5);
+  background: #f59e0b; /* amber-500: active mutation */
 }
 .bar-sorted {
-  background: linear-gradient(180deg, hsl(152 62% 50%), hsl(152 70% 38%));
-  box-shadow: 0 0 12px hsl(152 62% 46% / 0.45);
+  background: #22c55e; /* green-500 */
 }

@@ -1,13 +1,10 @@
 <script setup lang="ts">
-import type { Component, HTMLAttributes } from 'vue'
+import type { HTMLAttributes } from 'vue'
 import { cn } from '@/lib/utils'
 
 interface Props {
   label: string
   value: string
-  hint?: string
-  icon?: Component
-  iconClass?: string
   class?: HTMLAttributes['class']
 }
 
@@ -17,21 +14,16 @@ const props = defineProps<Props>()
 <template>
   <div
     :class="cn(
-      'relative overflow-hidden rounded-xl border border-border/70 bg-secondary/40 p-3',
-      'backdrop-blur transition-colors',
+      'flex flex-col gap-1 rounded-md border border-zinc-800 bg-zinc-900/50 px-3 py-2.5',
       props.class,
     )"
   >
-    <div class="flex items-center justify-between">
-      <span class="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        {{ label }}
-      </span>
-      <component :is="icon" v-if="icon" :class="cn('size-4 text-primary', iconClass)" />
-    </div>
-    <div class="mt-1 flex items-baseline gap-1">
-      <span class="font-mono text-xl font-bold tabular-nums text-foreground">{{ value }}</span>
-      <span v-if="hint" class="text-xs text-muted-foreground">{{ hint }}</span>
-    </div>
+    <span class="font-mono text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+      {{ label }}
+    </span>
+    <span class="font-mono text-lg font-medium tabular-nums leading-none text-zinc-100">
+      {{ value }}
+    </span>
     <slot />
   </div>
 </template>

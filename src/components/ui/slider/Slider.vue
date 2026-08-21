@@ -21,7 +21,7 @@ const model = defineModel<number[]>('modelValue', { required: true })
     v-model:model-value="model"
     :class="cn(
       'relative flex w-full touch-none select-none items-center',
-      props.orientation === 'vertical' ? 'flex-col' : 'h-5',
+      props.orientation === 'vertical' ? 'flex-col' : 'h-4',
       props.class,
     )"
     :orientation="orientation"
@@ -29,13 +29,13 @@ const model = defineModel<number[]>('modelValue', { required: true })
   >
     <SliderTrack
       :class="cn(
-        'relative grow overflow-hidden rounded-full bg-muted/70',
-        orientation === 'vertical' ? 'h-full w-1.5' : 'h-1.5 w-full',
+        'relative grow overflow-hidden rounded-sm bg-zinc-800',
+        orientation === 'vertical' ? 'h-full w-[2px]' : 'h-[2px] w-full',
       )"
     >
       <SliderRange
         :class="cn(
-          'absolute rounded-full bg-gradient-to-r from-primary to-accent shadow-[0_0_10px] shadow-primary/50',
+          'absolute rounded-sm bg-zinc-300',
           orientation === 'vertical' ? 'w-full' : 'h-full',
         )"
       />
@@ -44,9 +44,9 @@ const model = defineModel<number[]>('modelValue', { required: true })
     <template v-for="(_, index) in model" :key="index">
       <SliderThumb
         :class="cn(
-          'block h-4 w-4 rounded-full border-2 border-primary bg-background shadow-lg shadow-primary/30',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          'hover:scale-110 transition-transform',
+          'block size-3 rounded-[3px] border border-zinc-500 bg-zinc-100',
+          'transition-colors hover:border-zinc-300',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
         )"
       />
     </template>
