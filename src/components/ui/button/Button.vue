@@ -6,27 +6,27 @@ import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
   [
-    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium',
-    'border border-transparent transition-colors duration-150',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-    'disabled:pointer-events-none disabled:opacity-50',
+    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-xs sm:text-sm font-medium',
+    'border border-transparent transition-all duration-150 ease-out cursor-pointer select-none',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950',
+    'disabled:pointer-events-none disabled:opacity-40',
+    'active:scale-[0.98]',
     '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
-    'select-none',
   ],
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        secondary: 'border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700/70',
-        outline: 'border-zinc-700 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100',
-        ghost: 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100',
-        destructive: 'bg-red-600 text-white hover:bg-red-500',
+        default: 'bg-amber-500 text-zinc-950 font-semibold hover:bg-amber-400 shadow-sm shadow-amber-500/10',
+        secondary: 'border-zinc-800 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:border-zinc-700',
+        outline: 'border-zinc-800 bg-transparent text-zinc-300 hover:bg-zinc-800/80 hover:text-zinc-100 hover:border-zinc-700',
+        ghost: 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100',
+        destructive: 'bg-rose-600 text-white hover:bg-rose-500 shadow-sm shadow-rose-600/10',
       },
       size: {
-        default: 'h-9 px-3.5 text-sm',
-        sm: 'h-8 px-3 text-xs',
+        default: 'h-9 px-3.5 py-1.5',
+        sm: 'h-8 px-2.5 text-xs',
         lg: 'h-10 px-4 text-sm',
-        icon: 'h-9 w-9',
+        icon: 'h-9 w-9 p-0',
       },
     },
     defaultVariants: {
@@ -42,12 +42,14 @@ interface Props extends PrimitiveProps {
   variant?: ButtonVariants['variant']
   size?: ButtonVariants['size']
   class?: HTMLAttributes['class']
+  type?: 'button' | 'submit' | 'reset'
 }
 
 const props = withDefaults(defineProps<Props>(), {
   as: 'button',
   variant: 'default',
   size: 'default',
+  type: 'button',
 })
 </script>
 
@@ -55,6 +57,7 @@ const props = withDefaults(defineProps<Props>(), {
   <Primitive
     :as="as"
     :as-child="asChild"
+    :type="as === 'button' ? type : undefined"
     :class="cn(buttonVariants({ variant, size }), props.class)"
     v-bind="$attrs"
   >

@@ -1,35 +1,96 @@
-import type { AlgorithmMeta, BarState, SortingAlgorithmKey, SortGenerator, SortStep, Telemetry } from '@/lib/types'
+import type {
+  AlgorithmMeta,
+  ArrayDistributionKey,
+  BarState,
+  DistributionMeta,
+  SortingAlgorithmKey,
+  SortGenerator,
+  SortStep,
+  Telemetry,
+} from '@/lib/types'
 
 /**
- * Sorting algorithm generators.
+ * Sorting algorithm generators & array distribution presets.
  *
  * Each generator receives a working copy of the array plus a telemetry object.
  * It yields `SortStep` frames that the engine replays onto the rendered bars;
  * the working array is mutated in place, so generators never touch the DOM.
- *
- * Telemetry is the single source of truth for the live counters:
- *   - comparisons: every `<`/`>`/`<=` relation evaluated
- *   - writes:      every cell overwrite (swap counts as 2)
- *   - accesses:    every read of an array element (a full pass over two sides).
  */
 
 const scalar = Math.random
 
-/** A fresh random array of `n` values in [1, valueMax]. */
-export function randomArray(n: number, valueMax = 100): number[] {
+/** Generates an array based on the requested distribution preset. */
+export function generateArray(
+  n: number,
+  distribution: ArrayDistributionKey = 'random',
+  valueMax = 100,
+): number[] {
   const arr = new Array<number>(n)
-  for (let i = 0; i < n; i++) arr[i] = Math.floor(scalar() * valueMax) + 1
+  const minVal = 5
+
+  switch (distribution) {
+    case 'reversed': {
+      for (let i = 0; i < n; i++) {
+        const pct = (n - 1 - i) / Math.max(n - 1, 1)
+        arr[i] = Math.round(minVal + pct * (valueMax - minVal))
+      }
+      break
+    }
+    case 'nearlySorted': {
+      // Linear ascending array
+      for (let i = 0; i < n; i++) {
+        const pct = i / Math.max(n - 1, 1)
+        arr[i] = Math.round(minVal + pct * (valueMax - minVal))
+      }
+      // Swap ~8% of random pairs to introduce slight perturbations
+      const perturbations = Math.max(1, Math.floor(n * 0.08))
+      for (let k = 0; k < perturbations; k++) {
+        const i = Math.floor(scalar() * n)
+        const j = Math.max(0, Math.min(n - 1, i + Math.floor(scalar() * 5) - 2))
+        if (i !== j) {
+          const temp = arr[i]
+          arr[i] = arr[j]
+          arr[j] = temp
+        }
+      }
+      break
+    }
+    case 'fewUnique': {
+      // Pick from 4 fixed discrete bins
+      const levels = [
+        minVal + 0.15 * (valueMax - minVal),
+        minVal + 0.4 * (valueMax - minVal),
+        minVal + 0.7 * (valueMax - minVal),
+        valueMax,
+      ].map(Math.round)
+
+      for (let i = 0; i < n; i++) {
+        const levelIdx = Math.floor(scalar() * levels.length)
+        arr[i] = levels[levelIdx]
+      }
+      break
+    }
+    case 'random':
+    default: {
+      for (let i = 0; i < n; i++) {
+        arr[i] = Math.floor(scalar() * (valueMax - minVal + 1)) + minVal
+      }
+      break
+    }
+  }
+
   return arr
+}
+
+/** Legacy alias for backward compatibility. */
+export function randomArray(n: number, valueMax = 100): number[] {
+  return generateArray(n, 'random', valueMax)
 }
 
 function snapshot(arr: number[]): number[] {
   return arr.slice()
 }
 
-/**
- * Wrap an array read so we can count bucket-accesses. To keep overhead low,
- * only swap/overwrite frames snapshot the array; compare frames pass `null`.
- */
 function readCounter(telemetry: Telemetry): void {
   telemetry.accesses += 1
 }
@@ -40,7 +101,7 @@ const countCompare = (telemetry: Telemetry, a: number, b: number): boolean => {
   return a < b
 }
 
-/** Bubble Sort — O(n²) average / O(n) best. */
+/** Bubble Sort — O(n²) average / O(n) best when nearly sorted. */
 export function* bubbleSortGenerator(arr: number[], telemetry: Telemetry): SortGenerator {
   const n = arr.length
   for (let i = 0; i < n - 1; i++) {
@@ -68,9 +129,10 @@ export function* bubbleSortGenerator(arr: number[], telemetry: Telemetry): SortG
   if (n > 1) yield { type: 'sorted', indices: [0], arrayState: snapshot(arr) }
 }
 
-/** Insertion Sort — O(n²) average / O(n) best. */
+/** Insertion Sort — O(n²) average / O(n) best. Excellent for nearly sorted inputs. */
 export function* insertionSortGenerator(arr: number[], telemetry: Telemetry): SortGenerator {
   const n = arr.length
+  if (n > 0) yield { type: 'sorted', indices: [0], arrayState: snapshot(arr) }
   for (let i = 1; i < n; i++) {
     const key = arr[i]
     readCounter(telemetry)
@@ -87,11 +149,11 @@ export function* insertionSortGenerator(arr: number[], telemetry: Telemetry): So
     arr[j + 1] = key
     telemetry.writes += 1
     yield { type: 'overwrite', indices: [j + 1], value: key, arrayState: snapshot(arr) }
-    yield { type: 'sorted', indices: [i], arrayState: snapshot(arr) }
+    yield { type: 'sorted', range: [0, i], indices: [], arrayState: snapshot(arr) }
   }
 }
 
-/** Selection Sort — O(n²) regardless of input. */
+/** Selection Sort — O(n²) comparisons always, exactly O(n) swaps. */
 export function* selectionSortGenerator(arr: number[], telemetry: Telemetry): SortGenerator {
   const n = arr.length
   for (let i = 0; i < n - 1; i++) {
@@ -113,14 +175,12 @@ export function* selectionSortGenerator(arr: number[], telemetry: Telemetry): So
   if (n > 1) yield { type: 'sorted', indices: [n - 1], arrayState: snapshot(arr) }
 }
 
-/** Merge Sort — O(n log n). Writes are done in place with `overwrite` frames. */
+/** Merge Sort — O(n log n) guaranteed. Stable divide-and-conquer. */
 export function* mergeSortGenerator(arr: number[], telemetry: Telemetry): SortGenerator {
   const n = arr.length
 
   function* sort(lo: number, hi: number): SortGenerator {
-    if (lo >= hi) {
-      return
-    }
+    if (lo >= hi) return
     const mid = (lo + hi) >> 1
     yield* sort(lo, mid)
     yield* sort(mid + 1, hi)
@@ -163,7 +223,7 @@ export function* mergeSortGenerator(arr: number[], telemetry: Telemetry): SortGe
   yield* sort(0, n - 1)
 }
 
-/** Quick Sort (Lomuto partition, last element as pivot) — O(n log n) avg. */
+/** Quick Sort (Lomuto partition) — O(n log n) avg, in-place partition. */
 export function* quickSortGenerator(arr: number[], telemetry: Telemetry): SortGenerator {
   const n = arr.length
 
@@ -205,7 +265,7 @@ export function* quickSortGenerator(arr: number[], telemetry: Telemetry): SortGe
   yield* qs(0, n - 1)
 }
 
-/** Heap Sort (max-heap) — O(n log n) always. */
+/** Heap Sort (Binary max-heap) — O(n log n) in-place non-recursive. */
 export function* heapSortGenerator(arr: number[], telemetry: Telemetry): SortGenerator {
   const n = arr.length
 
@@ -254,54 +314,91 @@ export const GENERATORS: Record<SortingAlgorithmKey, (arr: number[], telemetry: 
   heap: heapSortGenerator,
 }
 
-/** Algorithm metadata (labels, complexity badges, stability). */
+/** Algorithm metadata. */
 export const ALGORITHM_META: Record<SortingAlgorithmKey, AlgorithmMeta> = {
   bubble: {
     id: 'bubble',
     label: 'Bubble Sort',
-    description: 'Repeatedly steps through the list, swapping adjacent elements that are out of order.',
+    paradigm: 'Comparison / Exchange',
+    description: 'Iteratively sweeps through adjacent pairs, bubbling the largest unsorted element to the end.',
+    bestFor: 'Teaching foundational mechanics; detecting already sorted arrays in O(n).',
     complexity: { timeBest: 'O(n)', timeAverage: 'O(n²)', timeWorst: 'O(n²)', space: 'O(1)' },
     stable: true,
   },
   insertion: {
     id: 'insertion',
     label: 'Insertion Sort',
-    description: 'Builds the sorted array one element at a time, shifting larger elements right.',
+    paradigm: 'Incremental Insertion',
+    description: 'Builds the final sorted sequence one item at a time by sliding each key into its correct relative spot.',
+    bestFor: 'Small arrays (n < 30) and nearly-sorted real-time streams.',
     complexity: { timeBest: 'O(n)', timeAverage: 'O(n²)', timeWorst: 'O(n²)', space: 'O(1)' },
     stable: true,
   },
   selection: {
     id: 'selection',
     label: 'Selection Sort',
-    description: 'Repeatedly selects the smallest remaining element and moves it to the front.',
+    paradigm: 'Selection / In-Place',
+    description: 'Finds the minimum element from the unsorted suffix and swaps it directly into the current prefix boundary.',
+    bestFor: 'Systems where write operations are significantly more costly than reads (at most n-1 swaps).',
     complexity: { timeBest: 'O(n²)', timeAverage: 'O(n²)', timeWorst: 'O(n²)', space: 'O(1)' },
     stable: false,
   },
   merge: {
     id: 'merge',
     label: 'Merge Sort',
-    description: 'Divides the array, sorts the halves, then merges them in linear time.',
+    paradigm: 'Divide & Conquer',
+    description: 'Recursively splits the array into singletons, then merges ordered halves in linear time.',
+    bestFor: 'Guaranteed O(n log n) predictable runtime and stable sorting of linked lists or large datasets.',
     complexity: { timeBest: 'O(n log n)', timeAverage: 'O(n log n)', timeWorst: 'O(n log n)', space: 'O(n)' },
     stable: true,
   },
   quick: {
     id: 'quick',
     label: 'Quick Sort',
-    description: 'Partitions around a pivot and recursively sorts the two sides.',
+    paradigm: 'Partitioning',
+    description: 'Selects a pivot, partitions elements into smaller/greater sub-arrays, and recursively sorts each partition.',
+    bestFor: 'Fastest general-purpose cache-friendly in-place sorting in practice.',
     complexity: { timeBest: 'O(n log n)', timeAverage: 'O(n log n)', timeWorst: 'O(n²)', space: 'O(log n)' },
     stable: false,
   },
   heap: {
     id: 'heap',
     label: 'Heap Sort',
-    description: 'Builds a max-heap, then repeatedly extracts the maximum element.',
+    paradigm: 'Priority Queue',
+    description: 'Transforms the array into a binary max-heap, then repeatedly extracts the root to the sorted tail.',
+    bestFor: 'Embedded or memory-critical systems requiring O(n log n) without auxiliary memory.',
     complexity: { timeBest: 'O(n log n)', timeAverage: 'O(n log n)', timeWorst: 'O(n log n)', space: 'O(1)' },
     stable: false,
   },
 }
 
-/** Ordered list of all algorithms for rendering the selector. */
 export const ALGORITHM_LIST: AlgorithmMeta[] = Object.values(ALGORITHM_META)
+
+/** Distribution preset metadata. */
+export const DISTRIBUTION_META: Record<ArrayDistributionKey, DistributionMeta> = {
+  random: {
+    id: 'random',
+    label: 'Random',
+    description: 'Uniform random distribution across the entire range.',
+  },
+  reversed: {
+    id: 'reversed',
+    label: 'Reversed',
+    description: 'Strictly descending elements. Triggers worst-case O(n²) for Bubble, Insertion, and simple QuickSort.',
+  },
+  nearlySorted: {
+    id: 'nearlySorted',
+    label: 'Nearly Sorted',
+    description: 'Array with ~92% elements in order. Demonstrates adaptive algorithms running in linear time.',
+  },
+  fewUnique: {
+    id: 'fewUnique',
+    label: 'Few Unique',
+    description: 'Contains only 4 distinct values repeated across the array. Tests stability and duplicate handling.',
+  },
+}
+
+export const DISTRIBUTION_LIST: DistributionMeta[] = Object.values(DISTRIBUTION_META)
 
 /** Returns the step's bar-state class used by the renderer. */
 export function stepToBarState(type: SortStep['type']): BarState {

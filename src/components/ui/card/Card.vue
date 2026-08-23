@@ -8,7 +8,7 @@ const props = defineProps<{ class?: HTMLAttributes['class'] }>()
 <template>
   <div
     :class="cn(
-      'rounded-md border border-zinc-800 bg-zinc-900/60 text-zinc-100',
+      'rounded-xl border border-zinc-800/80 bg-zinc-900/40 text-zinc-100 shadow-sm',
       props.class,
     )"
   >

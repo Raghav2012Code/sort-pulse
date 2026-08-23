@@ -20,8 +20,8 @@ const model = defineModel<number[]>('modelValue', { required: true })
   <SliderRoot
     v-model:model-value="model"
     :class="cn(
-      'relative flex w-full touch-none select-none items-center',
-      props.orientation === 'vertical' ? 'flex-col' : 'h-4',
+      'relative flex w-full touch-none select-none items-center py-2 cursor-pointer',
+      props.orientation === 'vertical' ? 'flex-col h-full' : 'h-5',
       props.class,
     )"
     :orientation="orientation"
@@ -29,13 +29,13 @@ const model = defineModel<number[]>('modelValue', { required: true })
   >
     <SliderTrack
       :class="cn(
-        'relative grow overflow-hidden rounded-sm bg-zinc-800',
-        orientation === 'vertical' ? 'h-full w-[2px]' : 'h-[2px] w-full',
+        'relative grow overflow-hidden rounded-full bg-zinc-800 transition-colors',
+        orientation === 'vertical' ? 'h-full w-1.5' : 'h-1.5 w-full',
       )"
     >
       <SliderRange
         :class="cn(
-          'absolute rounded-sm bg-zinc-300',
+          'absolute rounded-full bg-amber-500',
           orientation === 'vertical' ? 'w-full' : 'h-full',
         )"
       />
@@ -44,9 +44,10 @@ const model = defineModel<number[]>('modelValue', { required: true })
     <template v-for="(_, index) in model" :key="index">
       <SliderThumb
         :class="cn(
-          'block size-3 rounded-[3px] border border-zinc-500 bg-zinc-100',
-          'transition-colors hover:border-zinc-300',
-          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+          'block size-4 rounded-full border-2 border-amber-500 bg-zinc-950 shadow-sm',
+          'transition-all duration-150 ease-out hover:scale-125 hover:border-amber-400',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950',
+          'cursor-grab active:cursor-grabbing',
         )"
       />
     </template>

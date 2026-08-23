@@ -50,16 +50,7 @@ export interface Complexity {
   space: string
 }
 
-/** Static metadata describing an available sorting algorithm. */
-export interface AlgorithmMeta {
-  id: SortingAlgorithmKey
-  label: string
-  description: string
-  complexity: Complexity
-  stable: boolean
-}
-
-/** Keys of the built-in algorithm generators. */
+/** Supported algorithm keys. */
 export type SortingAlgorithmKey =
   | 'bubble'
   | 'insertion'
@@ -67,6 +58,26 @@ export type SortingAlgorithmKey =
   | 'merge'
   | 'quick'
   | 'heap'
+
+/** Static metadata describing an available sorting algorithm. */
+export interface AlgorithmMeta {
+  id: SortingAlgorithmKey
+  label: string
+  paradigm: string
+  description: string
+  bestFor: string
+  complexity: Complexity
+  stable: boolean
+}
+
+/** Supported initial array distribution presets. */
+export type ArrayDistributionKey = 'random' | 'reversed' | 'nearlySorted' | 'fewUnique'
+
+export interface DistributionMeta {
+  id: ArrayDistributionKey
+  label: string
+  description: string
+}
 
 /** A generator that yields `SortStep` frames; null steps mark "pass-through". */
 export type SortGenerator = Generator<SortStep | null, void, unknown>
@@ -88,15 +99,21 @@ export interface SortingEngine {
   readonly telemetry: Readonly<Ref<Telemetry>>
   readonly elapsed: Readonly<Ref<number>>
   readonly algorithm: Readonly<Ref<SortingAlgorithmKey>>
+  readonly distribution: Readonly<Ref<ArrayDistributionKey>>
   readonly speed: Readonly<Ref<number>>
   readonly arraySize: Readonly<Ref<number>>
+  readonly soundEnabled: Readonly<Ref<boolean>>
+  readonly statusMessage: Readonly<Ref<string>>
 
   selectAlgorithm: (key: SortingAlgorithmKey) => void
+  setDistribution: (key: ArrayDistributionKey) => void
   setSpeed: (speed: number) => void
   setArraySize: (size: number) => void
+  toggleSound: () => void
   start: () => void
   pause: () => void
   resume: () => void
   reset: () => void
   stepForward: () => void
+  dispose: () => void
 }

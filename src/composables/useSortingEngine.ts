@@ -1,38 +1,45 @@
 import { computed, readonly, ref, shallowRef } from 'vue'
-import { ALGORITHM_META, GENERATORS, randomArray } from '@/lib/algorithms'
+import {
+  ALGORITHM_META,
+  DISTRIBUTION_META,
+  GENERATORS,
+  generateArray,
+} from '@/lib/algorithms'
+import { soundEngine } from '@/lib/audio'
 import type {
+  ArrayDistributionKey,
   BarModel,
   BarState,
   EngineStatus,
-  SortStep,
   SortingAlgorithmKey,
   SortGenerator,
+  SortStep,
   Telemetry,
 } from '@/lib/types'
 
 /**
- * Reactive sorting engine.
- *
- * Owns the array bars (a plain object pool re-exposed through a shallowRef so
- * the template observes a fresh reference per frame without proxying every
- * bar), the generator lifecycle, the timing loop, and live telemetry.
+ * Reactive sorting engine with generator replay, dynamic batching,
+ * telemetry instrumentation, sound synthesis, and distribution presets.
  */
 export function useSortingEngine() {
   // ----- reactive state exposed to the UI -----
   const status = ref<EngineStatus>('idle')
   const algorithm = ref<SortingAlgorithmKey>('bubble')
-  const speed = ref(50)
-  const arraySize = ref(50)
+  const distribution = ref<ArrayDistributionKey>('random')
+  const speed = ref(60)
+  const arraySize = ref(40)
+  const soundEnabled = ref(false)
   const telemetry = shallowRef<Telemetry>({ comparisons: 0, writes: 0, accesses: 0 })
   const elapsedMs = ref(0)
   const bars = shallowRef<BarModel[]>([])
+  const statusMessage = ref('Ready to sort')
 
   // ----- non-reactive run-time bookkeeping -----
   let generator: SortGenerator | null = null
   let workingArray: number[] = []
   let sortedFlags: boolean[] = []
   let pool: BarModel[] = []
-  let maxHeight = 0
+  let maxHeight = 100
   let stepTimer: ReturnType<typeof setTimeout> | null = null
   let timeRAF: number | null = null
   let runStart = 0
@@ -66,7 +73,9 @@ export function useSortingEngine() {
   function refreshBarsArray(transient?: { indices: number[]; state: BarState }) {
     for (const bar of pool) {
       let state: BarState = sortedFlags[bar.id] ? 'sorted' : 'default'
-      if (transient && transient.indices.includes(bar.id)) state = transient.state
+      if (transient && transient.indices.includes(bar.id)) {
+        state = transient.state
+      }
       bar.state = state
     }
     bars.value = Array.from(pool)
@@ -108,29 +117,52 @@ export function useSortingEngine() {
     let transient: { indices: number[]; state: BarState } | null = null
 
     switch (step.type) {
-      case 'compare':
+      case 'compare': {
+        const [a, b] = step.indices
         transient = { indices: step.indices, state: 'comparing' }
+        if (pool[a] && pool[b]) {
+          statusMessage.value = `Comparing index [${a}] (${pool[a].value}) with [${b}] (${pool[b].value})`
+          if (soundEnabled.value) {
+            soundEngine.playTone(pool[a].value, maxHeight, 'compare')
+          }
+        }
         break
+      }
       case 'swap': {
         const [a, b] = step.indices
         if (a !== b && pool[a] && pool[b]) {
           const tmp = pool[a].value
           pool[a].value = pool[b].value
           pool[b].value = tmp
+          statusMessage.value = `Swapping index [${a}] (${pool[b].value}) and [${b}] (${pool[a].value})`
+          if (soundEnabled.value) {
+            soundEngine.playTone(pool[a].value, maxHeight, 'swap')
+          }
         }
         transient = { indices: step.indices, state: 'swapping' }
         break
       }
       case 'overwrite': {
-        if (step.value !== undefined) setValue(step.indices[0], step.value)
+        const [idx] = step.indices
+        if (step.value !== undefined) {
+          setValue(idx, step.value)
+          statusMessage.value = `Writing value ${step.value} to index [${idx}]`
+          if (soundEnabled.value) {
+            soundEngine.playTone(step.value, maxHeight, 'overwrite')
+          }
+        }
         transient = { indices: step.indices, state: 'overwriting' }
         break
       }
       case 'sorted': {
         if (step.range) {
           for (let i = step.range[0]; i <= step.range[1]; i++) sortedFlags[i] = true
+          statusMessage.value = `Sub-array [${step.range[0]}..${step.range[1]}] sorted in place`
         } else {
-          for (const idx of step.indices) sortedFlags[idx] = true
+          for (const idx of step.indices) {
+            sortedFlags[idx] = true
+            statusMessage.value = `Element at index [${idx}] finalized in sorted position`
+          }
         }
         break
       }
@@ -153,10 +185,10 @@ export function useSortingEngine() {
   }
 
   // ------------------------------------------------------------------
-  // Lifecycle
+  // Lifecycle & Performance Timing Curve
   // ------------------------------------------------------------------
   function createRun() {
-    workingArray = randomArray(arraySize.value)
+    workingArray = generateArray(arraySize.value, distribution.value)
     generator = GENERATORS[algorithm.value](workingArray, telemetry.value)
     buildPool(workingArray)
   }
@@ -166,22 +198,54 @@ export function useSortingEngine() {
     stepTimer = null
   }
 
-  function resolveDelay(speedVal: number): number {
-    // 0..100 -> ~260ms down to ~1ms on an exponential curve.
-    const ratio = 1 - (speedVal - 1) / 99
-    return Math.round(260 * Math.pow(ratio, 2)) + 1
+  /**
+   * Calculates dynamic batching and delay parameters:
+   * Returns { delayMs: number, stepsPerBatch: number }
+   */
+  function calculateExecutionTiming(speedVal: number): { delay: number; stepsPerTick: number } {
+    if (speedVal <= 40) {
+      // 1 to 40: 1 step per tick, delay 240ms down to 18ms
+      const ratio = (40 - speedVal) / 39
+      const delay = Math.round(18 + Math.pow(ratio, 1.8) * 222)
+      return { delay, stepsPerTick: 1 }
+    } else if (speedVal <= 75) {
+      // 41 to 75: 1 to 4 steps per tick, delay 16ms down to 4ms
+      const progress = (speedVal - 40) / 35
+      const steps = Math.floor(1 + progress * 3)
+      const delay = Math.round(16 - progress * 12)
+      return { delay, stepsPerTick: steps }
+    } else {
+      // 76 to 100: 4 to 28 steps per tick, minimal delay (0-2ms)
+      const progress = (speedVal - 75) / 25
+      const steps = Math.floor(4 + Math.pow(progress, 1.5) * 24)
+      return { delay: 0, stepsPerTick: steps }
+    }
   }
 
   function tick() {
     if (status.value !== 'running') return
-    if (runOneStep()) {
+
+    const { delay, stepsPerTick } = calculateExecutionTiming(speed.value)
+    let finished = false
+
+    for (let i = 0; i < stepsPerTick; i++) {
+      if (runOneStep()) {
+        finished = true
+        break
+      }
+    }
+
+    if (finished) {
       accumulatedMs += performance.now() - runStart
       elapsedMs.value = accumulatedMs
       stopTimer()
       status.value = 'complete'
+      const meta = ALGORITHM_META[algorithm.value]
+      statusMessage.value = `${meta.label} completed in ${elapsedMs.value.toFixed(1)}ms (${telemetry.value.comparisons} comparisons)`
       return
     }
-    stepTimer = setTimeout(tick, resolveDelay(speed.value))
+
+    stepTimer = setTimeout(tick, delay)
   }
 
   function beginRun() {
@@ -198,6 +262,7 @@ export function useSortingEngine() {
     sortedFlags = new Array(arraySize.value).fill(false)
     createRun()
     status.value = 'idle'
+    statusMessage.value = `Generated ${arraySize.value} elements (${DISTRIBUTION_META[distribution.value].label})`
   }
 
   function start() {
@@ -222,6 +287,7 @@ export function useSortingEngine() {
     accumulatedMs += performance.now() - runStart
     elapsedMs.value = accumulatedMs
     status.value = 'paused'
+    statusMessage.value = 'Execution paused'
   }
 
   function resume() {
@@ -263,6 +329,14 @@ export function useSortingEngine() {
     reset()
   }
 
+  function setDistribution(key: ArrayDistributionKey) {
+    if (key === distribution.value) return
+    stopLoop()
+    stopTimer()
+    distribution.value = key
+    reset()
+  }
+
   function setSpeed(v: number) {
     speed.value = v
   }
@@ -275,14 +349,16 @@ export function useSortingEngine() {
     reset()
   }
 
+  function toggleSound() {
+    const next = soundEngine.toggle()
+    soundEnabled.value = next
+  }
+
   function dispose() {
     stopLoop()
     stopTimer()
   }
 
-  // ------------------------------------------------------------------
-  // Exposed surface
-  // ------------------------------------------------------------------
   return {
     status: readonly(status),
     bars: readonly(bars),
@@ -290,11 +366,17 @@ export function useSortingEngine() {
     elapsed: readonly(elapsedMs),
     algorithm: readonly(algorithm),
     algorithmMeta: computed(() => ALGORITHM_META[algorithm.value]),
+    distribution: readonly(distribution),
+    distributionMeta: computed(() => DISTRIBUTION_META[distribution.value]),
     speed: readonly(speed),
     arraySize: readonly(arraySize),
+    soundEnabled: readonly(soundEnabled),
+    statusMessage: readonly(statusMessage),
     selectAlgorithm,
+    setDistribution,
     setSpeed,
     setArraySize,
+    toggleSound,
     start,
     pause,
     resume,
